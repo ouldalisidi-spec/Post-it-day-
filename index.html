@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Visual scheduling board — works offline, open this file directly"
+    />
+    <title>Visual Scheduling Board</title>
+    <style>
+      :root {
+        --header: #1e3a5f;
+        --header-accent: #ea580c;
+        --grid-line: #cbd5e1;
+        --cell-bg: #f8fafc;
+        --text: #1e293b;
+        --muted: #64748b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: "Segoe UI", system-ui, sans-serif;
+        color: var(--text);
+        background: #e2e8f0;
+      }
+      button {
+        font: inherit;
+        cursor: pointer;
+      }
+      .app {
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+      }
+      .toolbar {
+        background: var(--header);
+        color: #fff;
+        padding: 0.75rem 1rem;
+        border-bottom: 4px solid #334155;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .toolbar h1 {
+        margin: 0;
+        font-size: 1.25rem;
+      }
+      .toolbar p {
+        margin: 0.2rem 0 0;
+        font-size: 0.85rem;
+        opacity: 0.9;
+      }
+      .toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .btn {
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        padding: 0.45rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .btn:hover {
+        background: rgba(255, 255, 255, 0.22);
+      }
+      .btn-primary {
+        background: var(--header-accent);
+        border-color: #fb923c;
+      }
+      .btn-primary:hover {
+        background: #c2410c;
+      }
+      .btn-save-dirty {
+        background: #15803d;
+        border-color: #4ade80;
+      }
+      .status {
+        background: #f1f5f9;
+        border-bottom: 2px solid var(--grid-line);
+        padding: 0.4rem 1rem;
+        font-size: 0.85rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+      }
+      .status-unsaved {
+        color: #b91c1c;
+        font-weight: 700;
+      }
+      .status-saved {
+        color: #15803d;
+        font-weight: 700;
+      }
+      .board-wrap {
+        flex: 1;
+        overflow: auto;
+        padding: 0.75rem;
+      }
+      .board {
+        width: 100%;
+        min-width: 1100px;
+        border-collapse: collapse;
+        background: #fff;
+        border: 2px solid #94a3b8;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      }
+      .board thead th {
+        background: var(--header);
+        color: #fff;
+        border: 2px solid #334155;
+        padding: 0.6rem 0.35rem;
+        text-align: center;
+      }
+      .board thead .day-short {
+        font-size: 1.35rem;
+        font-weight: 700;
+      }
+      .board thead .day-long {
+        font-size: 0.7rem;
+        opacity: 0.9;
+        display: block;
+        margin-top: 0.15rem;
+      }
+      .board .row-label {
+        background: #e2e8f0;
+        border: 2px solid var(--grid-line);
+        font-weight: 700;
+        text-align: center;
+        padding: 0.5rem;
+        width: 7rem;
+        font-size: 0.95rem;
+      }
+      .cell {
+        border: 2px solid var(--grid-line);
+        background: var(--cell-bg);
+        vertical-align: top;
+        min-width: 8rem;
+        padding: 0.5rem;
+        min-height: 9rem;
+      }
+      .cell.drag-over {
+        background: #e0f2fe;
+        outline: 3px solid #0284c7;
+        outline-offset: -3px;
+      }
+      .cell-inner {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        justify-content: center;
+        align-content: flex-start;
+        min-height: 7.5rem;
+      }
+      .note {
+        width: 9.5rem;
+        padding: 0.45rem 0.55rem;
+        border-radius: 6px;
+        border: 2px solid;
+        box-shadow: 2px 3px 8px rgba(0, 0, 0, 0.12);
+        cursor: grab;
+        position: relative;
+        flex-shrink: 0;
+      }
+      .note:active {
+        cursor: grabbing;
+      }
+      .note.dragging {
+        opacity: 0.45;
+      }
+      .note-yellow {
+        background: #fef3c7;
+        border-color: #fcd34d;
+      }
+      .note-green {
+        background: #d1fae5;
+        border-color: #6ee7b7;
+      }
+      .note-red {
+        background: #fee2e2;
+        border-color: #fca5a5;
+      }
+      .note-text {
+        margin: 0;
+        font-size: 0.82rem;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 4.5rem;
+        overflow: hidden;
+      }
+      .note-author {
+        margin: 0.45rem 0 0;
+        padding-top: 0.35rem;
+        border-top: 2px solid rgba(0, 0, 0, 0.1);
+        font-size: 0.72rem;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .note-due {
+        margin: 0.25rem 0 0;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--muted);
+      }
+      .note-due.overdue {
+        color: #b91c1c;
+      }
+      .note-actions {
+        display: none;
+        gap: 0.25rem;
+        margin-top: 0.35rem;
+        padding-top: 0.35rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      .note:hover .note-actions,
+      .note:focus-within .note-actions {
+        display: flex;
+      }
+      .note-actions button {
+        flex: 1;
+        font-size: 0.68rem;
+        padding: 0.2rem;
+        border-radius: 4px;
+        border: 1px solid #94a3b8;
+        background: #fff;
+      }
+      .note-actions .del {
+        color: #b91c1c;
+        border-color: #fca5a5;
+      }
+      .modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+      .modal-backdrop.open {
+        display: flex;
+      }
+      .modal {
+        background: #fff;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 26rem;
+        border: 1px solid var(--grid-line);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      }
+      .modal header {
+        padding: 1rem 1.1rem;
+        border-bottom: 1px solid var(--grid-line);
+        font-weight: 700;
+        font-size: 1.05rem;
+      }
+      .modal body,
+      .modal .modal-body {
+        padding: 1rem 1.1rem;
+        display: block;
+      }
+      .modal .modal-body label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+      }
+      .modal .modal-body input,
+      .modal .modal-body textarea,
+      .modal .modal-body select {
+        width: 100%;
+        margin-bottom: 0.85rem;
+        padding: 0.45rem 0.55rem;
+        border: 1px solid var(--grid-line);
+        border-radius: 4px;
+        font: inherit;
+      }
+      .modal .modal-body textarea {
+        min-height: 5rem;
+        resize: vertical;
+      }
+      .color-pick {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.85rem;
+      }
+      .color-pick button {
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 6px;
+        border: 3px solid transparent;
+      }
+      .color-pick button.selected {
+        border-color: #334155;
+        transform: scale(1.08);
+      }
+      .color-pick .c-yellow {
+        background: #fcd34d;
+      }
+      .color-pick .c-green {
+        background: #6ee7b7;
+      }
+      .color-pick .c-red {
+        background: #fca5a5;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.65rem;
+      }
+      .modal footer,
+      .modal .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 0.85rem 1.1rem;
+        border-top: 1px solid var(--grid-line);
+      }
+      .modal .modal-footer .btn-cancel {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--grid-line);
+        padding: 0.45rem 1rem;
+        border-radius: 6px;
+      }
+      .modal .modal-footer .btn-ok {
+        background: var(--header);
+        color: #fff;
+        border: none;
+        padding: 0.45rem 1rem;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+      .err {
+        color: #b91c1c;
+        font-size: 0.85rem;
+        margin: 0 0 0.5rem;
+      }
+      .start-screen {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+      .start-card {
+        background: #fff;
+        border: 2px solid var(--grid-line);
+        border-radius: 10px;
+        padding: 2rem;
+        max-width: 28rem;
+        text-align: center;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      }
+      .start-card h2 {
+        margin: 0 0 0.5rem;
+      }
+      .start-card p {
+        color: var(--muted);
+        margin: 0 0 1.25rem;
+      }
+      .start-card .btn {
+        color: var(--text);
+        background: #f1f5f9;
+        border-color: var(--grid-line);
+        margin: 0.25rem;
+      }
+      .hidden {
+        display: none !important;
+      }
+
+      /* Page d'accueil — logos partenaires */
+      .splash {
+        min-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1.5rem;
+        background: linear-gradient(165deg, #f8fafc 0%, #e2e8f0 45%, #cbd5e1 100%);
+      }
+      .splash-card {
+        background: #fff;
+        border: 2px solid var(--grid-line);
+        border-radius: 14px;
+        padding: 2.5rem 2rem;
+        max-width: 52rem;
+        width: 100%;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(30, 58, 95, 0.12);
+      }
+      .splash-card h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.65rem;
+        color: var(--header);
+      }
+      .splash-card .splash-sub {
+        margin: 0 0 2rem;
+        color: var(--muted);
+        font-size: 1rem;
+      }
+      .splash-logos {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem 2.5rem;
+        margin-bottom: 2rem;
+        padding: 1.5rem 1rem;
+        border-top: 1px solid var(--grid-line);
+        border-bottom: 1px solid var(--grid-line);
+        background: #fafbfc;
+        border-radius: 10px;
+      }
+      .splash-logos img {
+        max-height: 4.5rem;
+        max-width: 14rem;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+      }
+      .splash-logos .logo-ponticelli {
+        max-height: 3.25rem;
+        max-width: 18rem;
+      }
+      .splash-enter {
+        background: var(--header);
+        color: #fff;
+        border: none;
+        padding: 0.85rem 2.25rem;
+        border-radius: 8px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        box-shadow: 0 4px 14px rgba(30, 58, 95, 0.35);
+      }
+      .splash-enter:hover {
+        background: #152a45;
+      }
+      .pride-bar {
+        background: #fff;
+        border-top: 2px solid var(--grid-line);
+        padding: 0.65rem 1rem;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem 1.75rem;
+      }
+      .pride-bar span {
+        font-size: 0.7rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-right: 0.25rem;
+      }
+      .pride-bar img {
+        max-height: 2rem;
+        max-width: 7.5rem;
+        object-fit: contain;
+        opacity: 0.92;
+      }
+      .pride-bar .logo-ponticelli {
+        max-height: 1.65rem;
+        max-width: 9rem;
+      }
+      .start-pride {
+        margin-top: 1.75rem;
+        padding-top: 1.25rem;
+        border-top: 1px solid var(--grid-line);
+      }
+      .start-pride .splash-logos {
+        margin-bottom: 0;
+        padding: 1rem;
+        gap: 1.25rem 1.75rem;
+      }
+      .start-pride .splash-logos img {
+        max-height: 2.75rem;
+        max-width: 10rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app" class="app hidden">
+      <header class="toolbar">
+        <div>
+          <h1>Scheduling Board</h1>
+          <p id="taskCount">0 tasks</p>
+        </div>
+        <div class="toolbar-actions">
+          <button type="button" class="btn btn-primary" id="btnAdd">+ Add task</button>
+          <button type="button" class="btn" id="btnSave">Save board</button>
+          <button type="button" class="btn" id="btnLoad">Open board</button>
+          <button type="button" class="btn" id="btnNew">New empty board</button>
+        </div>
+      </header>
+      <div class="status" id="statusBar">
+        <span id="saveStatus" class="status-saved">Saved</span>
+        <span>File: <strong id="fileName">scheduling-board.json</strong></span>
+      </div>
+      <main class="board-wrap">
+        <table class="board" id="boardTable" aria-label="Weekly schedule"></table>
+      </main>
+      <footer class="pride-bar" aria-label="Partenaires">
+        <span>Partenaires</span>
+        <img src="assets/logos/lassarat.png" alt="Lassarat" width="120" height="48" />
+        <img src="assets/logos/totalenergies.png" alt="TotalEnergies" width="140" height="48" />
+        <img
+          class="logo-ponticelli"
+          src="assets/logos/ponticelli.png"
+          alt="Ponticelli Angoil"
+          width="160"
+          height="40"
+        />
+      </footer>
+    </div>
+
+    <div id="splashScreen" class="splash">
+      <div class="splash-card">
+        <h1>Tableau de planning visuel</h1>
+        <p class="splash-sub">Coordination terrain — planification hebdomadaire</p>
+        <div class="splash-logos" role="group" aria-label="Logos partenaires">
+          <img src="assets/logos/lassarat.png" alt="Lassarat" />
+          <img src="assets/logos/totalenergies.png" alt="TotalEnergies" />
+          <img class="logo-ponticelli" src="assets/logos/ponticelli.png" alt="Ponticelli Angoil" />
+        </div>
+        <button type="button" class="splash-enter" id="btnSplashEnter">
+          Accéder au tableau de planning
+        </button>
+      </div>
+    </div>
+
+    <div id="startScreen" class="start-screen hidden">
+      <div class="start-card">
+        <h2>Scheduling Board</h2>
+        <p>Open a saved board file, or start with an empty board. No install required.</p>
+        <button type="button" class="btn btn-primary" id="btnStartLoad">Open board file (.json)</button>
+        <button type="button" class="btn" id="btnStartEmpty">Start empty board</button>
+        <div class="start-pride">
+          <div class="splash-logos" role="group" aria-label="Partenaires">
+            <img src="assets/logos/lassarat.png" alt="Lassarat" />
+            <img src="assets/logos/totalenergies.png" alt="TotalEnergies" />
+            <img class="logo-ponticelli" src="assets/logos/ponticelli.png" alt="Ponticelli Angoil" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true">
+      <form class="modal" id="noteForm">
+        <header id="modalTitle">Add task</header>
+        <div class="modal-body">
+          <p class="err hidden" id="formError"></p>
+          <label for="fAuthor">Name (required)</label>
+          <input id="fAuthor" type="text" required autocomplete="name" placeholder="Person responsible" />
+          <label for="fText">Task description</label>
+          <textarea id="fText" placeholder="What needs to be done?"></textarea>
+          <label>Status colour</label>
+          <div class="color-pick" id="colorPick">
+            <button type="button" class="c-yellow selected" data-color="yellow" title="Ongoing"></button>
+            <button type="button" class="c-green" data-color="green" title="Done"></button>
+            <button type="button" class="c-red" data-color="red" title="Delay"></button>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--muted); margin: -0.5rem 0 0.85rem">
+            Green = Done · Yellow = Ongoing · Red = Delay
+          </p>
+          <label for="fDue">Due date (optional)</label>
+          <input id="fDue" type="date" />
+          <div class="grid-2" id="placementFields">
+            <div>
+              <label for="fRow">Category</label>
+              <select id="fRow"></select>
+            </div>
+            <div>
+              <label for="fCol">Day</label>
+              <select id="fCol"></select>
+            </div>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn-cancel" id="btnModalCancel">Cancel</button>
+          <button type="submit" class="btn-ok">Save</button>
+        </footer>
+      </form>
+    </div>
+
+    <input type="file" id="fileInput" accept=".json,application/json" class="hidden" />
+
+    <script>
+      (function () {
+        "use strict";
+
+        var COLUMNS = [
+          { id: "MO", label: "Monday", short: "MO" },
+          { id: "TU", label: "Tuesday", short: "TU" },
+          { id: "WE", label: "Wednesday", short: "WE" },
+          { id: "TH", label: "Thursday", short: "TH" },
+          { id: "FR", label: "Friday", short: "FR" },
+          { id: "SA", label: "Saturday", short: "SA" },
+          { id: "SU", label: "Sunday", short: "SU" },
+        ];
+        var ROWS = [
+          { id: "SPI", label: "SPI" },
+          { id: "CSR", label: "CSR" },
+          { id: "SPV", label: "SPV" },
+          { id: "PREP", label: "PREP / SURVEY" },
+        ];
+        var STORAGE_KEY = "scheduling-board-autosave";
+        var DEFAULT_FILE = "scheduling-board.json";
+
+        var state = {
+          notes: [],
+          boardName: DEFAULT_FILE,
+          dirty: false,
+          started: false,
+          dragNoteId: null,
+        };
+        var modalMode = "create";
+        var editingId = null;
+        var selectedColor = "yellow";
+
+        var $ = function (id) {
+          return document.getElementById(id);
+        };
+
+        function uid() {
+          if (typeof crypto !== "undefined" && crypto.randomUUID) {
+            return crypto.randomUUID();
+          }
+          return "n-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
+        }
+
+        function escapeHtml(s) {
+          return String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        function normalizeColor(c) {
+          if (c === "blue" || c === "orange") return c === "blue" ? "yellow" : "red";
+          if (c === "green" || c === "red" || c === "yellow") return c;
+          return "yellow";
+        }
+
+        function randomRotation() {
+          return Math.round((Math.random() * 4 - 2) * 10) / 10;
+        }
+
+        function cellKey(rowId, colId) {
+          return rowId + "::" + colId;
+        }
+
+        function parseCellKey(key) {
+          var p = key.split("::");
+          if (p.length !== 2) return null;
+          var okR = ROWS.some(function (r) {
+            return r.id === p[0];
+          });
+          var okC = COLUMNS.some(function (c) {
+            return c.id === p[1];
+          });
+          if (!okR || !okC) return null;
+          return { rowId: p[0], columnId: p[1] };
+        }
+
+        function markDirty() {
+          state.dirty = true;
+          $("saveStatus").textContent = "Unsaved changes";
+          $("saveStatus").className = "status-unsaved";
+          $("btnSave").classList.add("btn-save-dirty");
+          autosave();
+        }
+
+        function markClean() {
+          state.dirty = false;
+          $("saveStatus").textContent = "Saved";
+          $("saveStatus").className = "status-saved";
+          $("btnSave").classList.remove("btn-save-dirty");
+        }
+
+        function autosave() {
+          try {
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify({
+                version: 1,
+                notes: state.notes,
+                boardName: state.boardName,
+                savedAt: new Date().toISOString(),
+              }),
+            );
+          } catch (e) {
+            /* file:// or private mode */
+          }
+        }
+
+        function tryRestoreAutosave() {
+          try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return false;
+            var data = JSON.parse(raw);
+            if (!data || !Array.isArray(data.notes)) return false;
+            loadNotes(data.notes, data.boardName || DEFAULT_FILE);
+            return true;
+          } catch (e) {
+            return false;
+          }
+        }
+
+        function loadNotes(notes, fileName) {
+          state.notes = notes
+            .filter(function (n) {
+              return n && n.id && n.authorName && parseCellKey(cellKey(n.rowId, n.columnId));
+            })
+            .map(function (n) {
+              return {
+                id: n.id,
+                text: n.text || "",
+                authorName: String(n.authorName).trim(),
+                color: normalizeColor(n.color),
+                rowId: n.rowId,
+                columnId: n.columnId,
+                order: typeof n.order === "number" ? n.order : Date.now(),
+                rotation: typeof n.rotation === "number" ? n.rotation : randomRotation(),
+                dueDate: n.dueDate || undefined,
+                createdAt: n.createdAt || new Date().toISOString(),
+                updatedAt: n.updatedAt || new Date().toISOString(),
+              };
+            });
+          state.boardName = fileName || DEFAULT_FILE;
+          $("fileName").textContent = state.boardName;
+          markClean();
+          renderBoard();
+          updateCount();
+        }
+
+        function notesInCell(rowId, colId) {
+          return state.notes
+            .filter(function (n) {
+              return n.rowId === rowId && n.columnId === colId;
+            })
+            .sort(function (a, b) {
+              return a.order - b.order;
+            });
+        }
+
+        function nextOrder(rowId, colId) {
+          var list = notesInCell(rowId, colId);
+          if (!list.length) return Date.now();
+          return Math.max.apply(
+            null,
+            list.map(function (n) {
+              return n.order;
+            }),
+          ) + 1;
+        }
+
+        function updateCount() {
+          var n = state.notes.length;
+          $("taskCount").textContent = n + (n === 1 ? " task" : " tasks");
+        }
+
+        function formatDue(iso) {
+          try {
+            var d = new Date(iso + "T12:00:00");
+            return d.toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            });
+          } catch (e) {
+            return iso;
+          }
+        }
+
+        function isOverdue(iso) {
+          var t = new Date();
+          t.setHours(0, 0, 0, 0);
+          var d = new Date(iso + "T00:00:00");
+          return d < t;
+        }
+
+        function renderBoard() {
+          var table = $("boardTable");
+          var head =
+            "<thead><tr><th>&nbsp;</th>" +
+            COLUMNS.map(function (c) {
+              return (
+                '<th><span class="day-short">' +
+                escapeHtml(c.short) +
+                '</span><span class="day-long">' +
+                escapeHtml(c.label) +
+                "</span></th>"
+              );
+            }).join("") +
+            "</tr></thead>";
+          var body = "<tbody>";
+          ROWS.forEach(function (row) {
+            body += "<tr><th class=\"row-label\">" + escapeHtml(row.label) + "</th>";
+            COLUMNS.forEach(function (col) {
+              var key = cellKey(row.id, col.id);
+              body +=
+                '<td class="cell" data-cell="' +
+                escapeHtml(key) +
+                '"><div class="cell-inner">';
+              notesInCell(row.id, col.id).forEach(function (note) {
+                body += noteHtml(note);
+              });
+              body += "</div></td>";
+            });
+            body += "</tr>";
+          });
+          body += "</tbody>";
+          table.innerHTML = head + body;
+          bindNoteEvents();
+          bindCellDrop();
+        }
+
+        function noteHtml(note) {
+          var rot = note.rotation || 0;
+          var due =
+            note.dueDate
+              ? '<p class="note-due' +
+                (isOverdue(note.dueDate) ? " overdue" : "") +
+                '">Due ' +
+                escapeHtml(formatDue(note.dueDate)) +
+                (isOverdue(note.dueDate) ? " (overdue)" : "") +
+                "</p>"
+              : "";
+          return (
+            '<article class="note note-' +
+            note.color +
+            '" draggable="true" data-note-id="' +
+            escapeHtml(note.id) +
+            '" style="transform:rotate(' +
+            rot +
+            'deg)" title="Double-click to edit">' +
+            '<p class="note-text">' +
+            escapeHtml(note.text.trim() || "—") +
+            "</p>" +
+            '<p class="note-author">' +
+            escapeHtml(note.authorName) +
+            "</p>" +
+            due +
+            '<div class="note-actions">' +
+            '<button type="button" data-edit="' +
+            escapeHtml(note.id) +
+            '">Edit</button>' +
+            '<button type="button" class="del" data-del="' +
+            escapeHtml(note.id) +
+            '">Del</button>' +
+            "</div></article>"
+          );
+        }
+
+        function bindNoteEvents() {
+          document.querySelectorAll(".note").forEach(function (el) {
+            el.addEventListener("dragstart", onDragStart);
+            el.addEventListener("dragend", onDragEnd);
+            el.addEventListener("dblclick", function (e) {
+              e.preventDefault();
+              openEdit(el.getAttribute("data-note-id"));
+            });
+            var editBtn = el.querySelector("[data-edit]");
+            var delBtn = el.querySelector("[data-del]");
+            if (editBtn) {
+              editBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                openEdit(el.getAttribute("data-note-id"));
+              });
+            }
+            if (delBtn) {
+              delBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                deleteNote(el.getAttribute("data-note-id"));
+              });
+            }
+          });
+        }
+
+        function bindCellDrop() {
+          document.querySelectorAll(".cell").forEach(function (cell) {
+            cell.addEventListener("dragover", function (e) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              cell.classList.add("drag-over");
+            });
+            cell.addEventListener("dragleave", function () {
+              cell.classList.remove("drag-over");
+            });
+            cell.addEventListener("drop", function (e) {
+              e.preventDefault();
+              cell.classList.remove("drag-over");
+              var noteId = state.dragNoteId || e.dataTransfer.getData("text/plain");
+              var parsed = parseCellKey(cell.getAttribute("data-cell"));
+              if (!noteId || !parsed) return;
+              moveNote(noteId, parsed.rowId, parsed.columnId);
+            });
+          });
+        }
+
+        function onDragStart(e) {
+          var el = e.currentTarget;
+          var id = el.getAttribute("data-note-id");
+          state.dragNoteId = id;
+          e.dataTransfer.setData("text/plain", id);
+          e.dataTransfer.effectAllowed = "move";
+          el.classList.add("dragging");
+        }
+
+        function onDragEnd(e) {
+          e.currentTarget.classList.remove("dragging");
+          state.dragNoteId = null;
+          document.querySelectorAll(".cell.drag-over").forEach(function (c) {
+            c.classList.remove("drag-over");
+          });
+        }
+
+        function moveNote(id, rowId, colId) {
+          var note = state.notes.find(function (n) {
+            return n.id === id;
+          });
+          if (!note) return;
+          if (note.rowId === rowId && note.columnId === colId) return;
+          note.rowId = rowId;
+          note.columnId = colId;
+          note.order = nextOrder(rowId, colId);
+          note.updatedAt = new Date().toISOString();
+          markDirty();
+          renderBoard();
+        }
+
+        function deleteNote(id) {
+          if (!window.confirm("Delete this task?")) return;
+          state.notes = state.notes.filter(function (n) {
+            return n.id !== id;
+          });
+          markDirty();
+          renderBoard();
+          updateCount();
+        }
+
+        function openCreate() {
+          modalMode = "create";
+          editingId = null;
+          $("modalTitle").textContent = "Add task";
+          $("placementFields").classList.remove("hidden");
+          $("fAuthor").value = "";
+          $("fText").value = "";
+          $("fDue").value = "";
+          setColor("yellow");
+          $("fRow").value = "SPI";
+          $("fCol").value = "MO";
+          $("formError").classList.add("hidden");
+          $("modalBackdrop").classList.add("open");
+          $("fAuthor").focus();
+        }
+
+        function openEdit(id) {
+          var note = state.notes.find(function (n) {
+            return n.id === id;
+          });
+          if (!note) return;
+          modalMode = "edit";
+          editingId = id;
+          $("modalTitle").textContent = "Edit task";
+          $("placementFields").classList.add("hidden");
+          $("fAuthor").value = note.authorName;
+          $("fText").value = note.text;
+          $("fDue").value = note.dueDate || "";
+          setColor(note.color);
+          $("formError").classList.add("hidden");
+          $("modalBackdrop").classList.add("open");
+          $("fAuthor").focus();
+        }
+
+        function closeModal() {
+          $("modalBackdrop").classList.remove("open");
+        }
+
+        function setColor(c) {
+          selectedColor = c;
+          document.querySelectorAll("#colorPick button").forEach(function (btn) {
+            btn.classList.toggle("selected", btn.getAttribute("data-color") === c);
+          });
+        }
+
+        function saveForm(e) {
+          e.preventDefault();
+          var author = $("fAuthor").value.trim();
+          if (!author) {
+            $("formError").textContent = "Name is required.";
+            $("formError").classList.remove("hidden");
+            return;
+          }
+          var text = $("fText").value.trim();
+          var due = $("fDue").value.trim() || undefined;
+          var now = new Date().toISOString();
+
+          if (modalMode === "create") {
+            var rowId = $("fRow").value;
+            var colId = $("fCol").value;
+            state.notes.push({
+              id: uid(),
+              text: text,
+              authorName: author,
+              color: selectedColor,
+              rowId: rowId,
+              columnId: colId,
+              order: nextOrder(rowId, colId),
+              rotation: randomRotation(),
+              dueDate: due,
+              createdAt: now,
+              updatedAt: now,
+            });
+          } else if (editingId) {
+            var note = state.notes.find(function (n) {
+              return n.id === editingId;
+            });
+            if (note) {
+              note.text = text;
+              note.authorName = author;
+              note.color = selectedColor;
+              note.dueDate = due;
+              if (!due) delete note.dueDate;
+              note.updatedAt = now;
+            }
+          }
+          markDirty();
+          renderBoard();
+          updateCount();
+          closeModal();
+        }
+
+        function serializeBoard() {
+          return JSON.stringify(
+            {
+              version: 1,
+              notes: state.notes,
+              boardName: state.boardName,
+              savedAt: new Date().toISOString(),
+            },
+            null,
+            2,
+          );
+        }
+
+        function downloadBoard() {
+          var blob = new Blob([serializeBoard()], { type: "application/json" });
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = state.boardName || DEFAULT_FILE;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(a.href);
+          markClean();
+          autosave();
+        }
+
+        function pickFile() {
+          $("fileInput").click();
+        }
+
+        function onFilePicked(e) {
+          var file = e.target.files && e.target.files[0];
+          e.target.value = "";
+          if (!file) return;
+          var reader = new FileReader();
+          reader.onload = function () {
+            try {
+              var data = JSON.parse(reader.result);
+              if (!data || !Array.isArray(data.notes)) {
+                window.alert("Invalid board file.");
+                return;
+              }
+              if (state.dirty && !window.confirm("Unsaved changes will be replaced. Continue?")) {
+                return;
+              }
+              loadNotes(data.notes, data.boardName || file.name);
+              showApp();
+            } catch (err) {
+              window.alert("Could not read this file.");
+            }
+          };
+          reader.readAsText(file);
+        }
+
+        function showApp() {
+          state.started = true;
+          $("splashScreen").classList.add("hidden");
+          $("startScreen").classList.add("hidden");
+          $("app").classList.remove("hidden");
+        }
+
+        function showStartScreen() {
+          $("splashScreen").classList.add("hidden");
+          $("startScreen").classList.remove("hidden");
+          $("app").classList.add("hidden");
+        }
+
+        function enterFromSplash() {
+          if (tryRestoreAutosave()) {
+            showApp();
+          } else {
+            showStartScreen();
+          }
+        }
+
+        function startEmpty() {
+          if (state.dirty && !window.confirm("Discard unsaved changes?")) return;
+          loadNotes([], DEFAULT_FILE);
+          showApp();
+        }
+
+        function initSelects() {
+          $("fRow").innerHTML = ROWS.map(function (r) {
+            return '<option value="' + r.id + '">' + escapeHtml(r.label) + "</option>";
+          }).join("");
+          $("fCol").innerHTML = COLUMNS.map(function (c) {
+            return (
+              '<option value="' +
+              c.id +
+              '">' +
+              escapeHtml(c.label) +
+              " (" +
+              c.short +
+              ")</option>"
+            );
+          }).join("");
+        }
+
+        function initColorPick() {
+          document.querySelectorAll("#colorPick button").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+              setColor(btn.getAttribute("data-color"));
+            });
+          });
+        }
+
+        $("btnAdd").addEventListener("click", openCreate);
+        $("btnSave").addEventListener("click", downloadBoard);
+        $("btnLoad").addEventListener("click", pickFile);
+        $("btnNew").addEventListener("click", startEmpty);
+        $("btnStartLoad").addEventListener("click", pickFile);
+        $("btnStartEmpty").addEventListener("click", startEmpty);
+        $("btnSplashEnter").addEventListener("click", enterFromSplash);
+        $("btnModalCancel").addEventListener("click", closeModal);
+        $("noteForm").addEventListener("submit", saveForm);
+        $("fileInput").addEventListener("change", onFilePicked);
+        $("modalBackdrop").addEventListener("click", function (e) {
+          if (e.target === $("modalBackdrop")) closeModal();
+        });
+
+        window.addEventListener("beforeunload", function (e) {
+          if (state.dirty) {
+            e.preventDefault();
+            e.returnValue = "";
+          }
+        });
+
+        initSelects();
+        initColorPick();
+      })();
+    </script>
+  </body>
+</html>
